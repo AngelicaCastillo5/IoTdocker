@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+
+  emqx:
+    image: emqx/emqx:latest
+    container_name: emqx
+    ports:
+      - "1883:1883"  # MQTT
+      - "18083:18083"  # Dashboard web
+    networks:
+      - iot-net
+
+  python-sensor:
+    build: ./python-sensor
+    container_name: python-sensor
+    depends_on:
+      - emqx
+    networks:
+      - iot-net
+
+  nodered:
+    image: nodered/node-red:latest
+    container_name: nodered
+    ports:
+      - "1880:1880"
+    depends_on:
+      - emqx
+    volumes:
+      - nodered_data:/data
+    networks:
+      - iot-net
+
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf
+    depends_on:
+      - influxdb
+      - emqx
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    networks:
+      - iot-net
+
+  influxdb:
+    image: influxdb:1.8
+    container_name: influxdb
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+    networks:
+      - iot-net
+
+  chronograf:
+    image: chronograf:latest
+    container_name: chronograf
+    ports:
+      - "8888:8888"
+    depends_on:
+      - influxdb
+    networks:
+      - iot-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - influxdb
+    networks:
+      - iot-net
+
+  kapacitor:
+    image: kapacitor:latest
+    container_name: kapacitor
+    depends_on:
+      - influxdb
+    networks:
+      - iot-net
+
+  thingsboard:
+    image: thingsboard/tb-postgres
+    container_name: thingsboard
+    restart: always
+    ports:
+      - "8080:9090"
+    environment:
+      TB_QUEUE_TYPE: in-memory
+    networks:
+      - iot-net
+
+volumes:
+  influxdb_data:
+  grafana_data:
+  nodered_data:
+
+networks:
+  iot-net:
+    driver: bridge
